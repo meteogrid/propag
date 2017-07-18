@@ -1,0 +1,11 @@
+.cabal-sandbox
+cabal.sandbox.config
+*.sw?
+dist
+.stack-work
+data
+yesod-devel
+result*
+*.tif
+dist-newstyle
+cabal.project.local

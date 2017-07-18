@@ -1,0 +1,109 @@
+name:                  propag
+version:               0.1.0.0
+synopsis:              2D wildfire spread simulator
+description:           Implements a parallel 2D wildfire spread simulator.
+homepage:              https://github.com/meteogrid/propag
+license:               Apache-2.0
+license-file:          LICENSE
+author:                Alberto Valverde González
+maintainer:            alberto@meteogrid.com
+copyright:             2015-2017
+category:              Simulation
+build-type:            Simple
+extra-source-files:    README.md
+cabal-version:         >=1.10
+
+source-repository head
+  type:                git
+  location:            git@github.com:meteogrid/propag.git
+
+library
+  build-depends:       base >=4.8 && <5
+                     , vector
+                     , vector-missing
+                     , vector-mmap
+                     , transformers
+                     , mtl
+                     , containers
+                     , unordered-containers
+                     , data-default
+                     , lens
+                     , dimensional
+                     , behave-hs
+                     , time
+                     , text
+                     , containers
+                     , either
+                     , these
+                     , ieee754
+                     , HStringTemplate
+                     , hashable
+                     , exceptions
+                     , filepath
+                     , directory
+                     , stm
+                     , bytestring
+                     , temporary
+                     , psqueues
+                     , linear
+
+  hs-source-dirs:      src
+
+  default-language:    Haskell2010
+
+  exposed-modules:     Propag
+                     , Propag.Types
+                     , Propag.Util
+                     , Propag.BlockMap
+                     , Propag.Template
+                     , Propag.Engine
+                     , Propag.Geometry
+
+  ghc-options:         -Wall
+                       ---Werror
+                       -fwarn-incomplete-patterns
+                       -fwarn-incomplete-uni-patterns
+                       -funbox-strict-fields
+
+
+
+test-suite spec
+  type:                exitcode-stdio-1.0
+  build-depends:   
+                       base
+                     , hspec
+                     , propag
+                     , QuickCheck
+                     , dimensional
+                     , aeson
+                     , text
+                     , time
+                     , containers
+                     , lens
+                     , data-default
+  ghc-options:         -Wall -rtsopts
+                       -fwarn-incomplete-patterns
+                       -fwarn-incomplete-uni-patterns
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  default-language:    Haskell2010
+  other-modules:       Propag.GeometrySpec
+                     , Propag.BlockMapSpec
+
+executable propag-demo
+  main-is:             Main.hs
+  hs-source-dirs:      app
+  build-depends:       base
+                     , propag
+                     , vector
+                     , random
+                     , dimensional
+                     , lens
+                     , time
+                     , either
+  ghc-options:         -Wall
+                       -rtsopts
+                       -threaded
+                       "-with-rtsopts=-H200M -A12m -s -N -qg"
+
+  default-language:    Haskell2010

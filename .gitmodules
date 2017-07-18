@@ -1,0 +1,6 @@
+[submodule "libs/behave-hs"]
+	path = libs/behave-hs
+	url = https://github.com/albertov/behave-hs
+[submodule "libs/vector-missing"]
+	path = libs/vector-missing
+	url = https://github.com/meteogrid/vector-missing
