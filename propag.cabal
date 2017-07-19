@@ -75,7 +75,6 @@ test-suite spec
                      , propag
                      , QuickCheck
                      , dimensional
-                     , aeson
                      , text
                      , time
                      , containers

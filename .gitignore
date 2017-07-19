@@ -9,3 +9,4 @@ result*
 *.tif
 dist-newstyle
 cabal.project.local
+core*

@@ -137,7 +137,6 @@ module Propag.Types (
   , module Behave.Units
   , module Behave
   , module Numeric.Units.Dimensional.SIUnits
-  , module Data.Vector.Missing
 ) where
 
 import Propag.BlockMap
@@ -163,7 +162,7 @@ import Data.Typeable (Typeable)
 import Data.String (IsString)
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Storable as St
-import Data.Vector.Missing
+import Data.Vector.Missing (Nullable(..))
 import Foreign.Storable
 import Foreign.Ptr (plusPtr)
 import GHC.Exts (Constraint)
@@ -657,8 +656,9 @@ prExtent = prGeoReference . to geoRefExtent
 
 type CanSerialize l a =
   (( PropagIOConstraint l a
-  , Missing (PropagIOVector l) (PropagIONullable l a)
   , Elem (PropagIONullable l a) ~ a
+  , G.Vector (PropagIOVector l) (PropagIONullable l a)
+  , Nullable (PropagIONullable l a)
   ) :: Constraint)
 
 type CanSerializePropagTypes l =

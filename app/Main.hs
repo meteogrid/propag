@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -24,9 +23,9 @@ import System.Random (randomRIO)
 main :: IO ()
 main = void $ propagate DemoIOConfig cfg
   where
-    time = timeOfDayToTime (TimeOfDay 11 0 0)
-    startTime = UTCTime (fromGregorian 2012 8 27) time
-    endTime = UTCTime (fromGregorian 2012 8 28) time
+    todTime = timeOfDayToTime (TimeOfDay 11 0 0)
+    startTime = UTCTime (fromGregorian 2012 8 27) todTime
+    endTime = UTCTime (fromGregorian 2012 8 28) todTime
     timeSpec = Interval startTime endTime (1 DP.*~ hour)
     cfg :: InitialPropagConfig
     cfg = def
@@ -51,18 +50,12 @@ main = void $ propagate DemoIOConfig cfg
             }
 
 data DemoIO
-
-type HasDemoIO a = (Show a , Eq a)
-
-type instance PropagIOConstraint DemoIO a = HasDemoIO a
+type instance PropagIOConstraint DemoIO a = ()
 type instance PropagIONullable   DemoIO a = Maybe a
-
-instance Missing V.Vector (Maybe a) where
-  type BaseVector V.Vector (Maybe a) = V.Vector
 
 instance HasLoadExtent DemoIO where
   type PropagIOVector  DemoIO = V.Vector
-  data PropagIOConfig  DemoIO = DemoIOConfig deriving Show
+  data PropagIOConfig  DemoIO = DemoIOConfig
 
   loadExtent _ Constant{_inputValue=v} geoRef = do
     let vec = V.replicate (product (grSize geoRef)) (Just v)
