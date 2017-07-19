@@ -35,7 +35,6 @@ library
                      , containers
                      , either
                      , these
-                     , ieee754
                      , HStringTemplate
                      , hashable
                      , exceptions

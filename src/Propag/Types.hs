@@ -7,7 +7,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -35,7 +34,7 @@ module Propag.Types (
   , BlockIndex
   , PropagationResult (..)
   , BlockSize (..)
-  , HasDifference (..)
+  , HasDistance (..)
   , HasLoadExtent (..)
   , CanSerialize
   , UniformityCondition (..)
@@ -112,7 +111,7 @@ module Propag.Types (
   , interpolateTemplates
   , explodeAndInterpolate
   , allEqual
-  , rangeSmallerThan
+  , distanceSmallerThan
 
   , fTime
   , fOrigin
@@ -166,9 +165,7 @@ import Data.Vector.Missing (Nullable(..))
 import Foreign.Storable
 import Foreign.Ptr (plusPtr)
 import GHC.Exts (Constraint)
-import GHC.Generics (Generic)
 
-import Numeric.IEEE (IEEE)
 import qualified Numeric.Units.Dimensional.Prelude as DP
 
 import Numeric.Units.Dimensional.Variants (Variant(DUnit))
@@ -194,14 +191,14 @@ type family PropagIONullable   (l :: *) (a :: *) :: *
 type Time = Behave.Time Double
 type DistanceUnit = Unit 'NonMetric DLength Double
 
-class Ord a => HasDifference a where
-  difference    :: a -> a -> a
+class HasDistance a where
+  distance    :: a -> a -> a
 
-  default difference :: Num a => a -> a -> a
-  difference  = (-)
-  {-# INLINE difference #-}
+  default distance :: Num a => a -> a -> a
+  distance a b = abs (a - b)
+  {-# INLINE distance #-}
 
-class HasDifference (UnitQuantity d a) => IsUnit (d :: * -> *) a where
+class IsUnit (d :: * -> *) a where
   type UnitQuantity d a :: *
 
   infixl 7 *~
@@ -210,16 +207,16 @@ class HasDifference (UnitQuantity d a) => IsUnit (d :: * -> *) a where
   infixl 7 /~
   (/~) :: UnitQuantity d a -> d a -> a
 
-instance (IEEE a, Num a) => IsUnit (Unit k d) a where
+instance Fractional a => IsUnit (Unit k d) a where
   type UnitQuantity (Unit k d) a = Quantity d a
   (*~) = (DP.*~)
   (/~) = (DP./~)
   {-# INLINE (*~) #-}
   {-# INLINE (/~) #-}
 
-instance (Ord a, IEEE a) => HasDifference (Quantity d a) where
-  difference     = (DP.-)
-  {-# INLINE difference #-}
+instance Num a => HasDistance (Quantity d a) where
+  distance a b = DP.abs (a DP.- b)
+  {-# INLINE distance #-}
 
 data FuelCode a = FuelCode
   deriving (Eq, Show)
@@ -232,7 +229,7 @@ instance IsUnit FuelCode Int16 where
   {-# INLINE (*~) #-}
   {-# INLINE (/~) #-}
 
-instance HasDifference Int16
+instance HasDistance Int16
 
 newtype BearingAngle a =
   BearingAngle (Unit 'NonMetric DAzimuth a)
@@ -245,15 +242,12 @@ deriving instance Ord (Quantity DAzimuth a) => Ord (BearingAngleQ a)
 deriving instance Eq (Quantity DAzimuth a) => Eq (BearingAngleQ a)
 deriving instance Storable (Quantity DAzimuth a) => Storable (BearingAngleQ a)
 
-instance (Ord a, IEEE a) => HasDifference (BearingAngleQ a) where
-  BearingAngleQ a `difference` BearingAngleQ b = BearingAngleQ (s' DP.*~ radian)
-    where
-      s = (a DP.- b) DP./~ radian
-      s' = if s < 0 then s + 2*pi else s
-  {-# INLINE difference #-}
+instance Num a => HasDistance (BearingAngleQ a) where
+  BearingAngleQ a `distance` BearingAngleQ b = BearingAngleQ (a `distance` b)
+  {-# INLINE distance #-}
 
 
-instance (IEEE a, Num a) => IsUnit BearingAngle a where
+instance Fractional a => IsUnit BearingAngle a where
   type UnitQuantity BearingAngle a = BearingAngleQ a
   v               *~ BearingAngle u = BearingAngleQ (v DP.*~ u)
   BearingAngleQ v /~ BearingAngle u = v DP./~ u
@@ -320,7 +314,7 @@ data PropagInputs f =
   , _wood            :: !(f (Unit 'NonMetric DRatio) Double)
   -- | Wind speed
   , _windSpeed       :: !(f (Unit 'NonMetric DVelocity) Double)
-  -- | Wind azimuth (compass bearing)
+  -- | Wind direction azimuth (compass bearing)
   , _windBearing     :: !(f BearingAngle Double)
   -- | Terrain slope (rise/reach ratio)
   , _slope           :: !(f (Unit 'NonMetric DRatio) Double)
@@ -328,7 +322,7 @@ data PropagInputs f =
   , _aspect          :: !(f BearingAngle Double)
   -- | Fuel catalog indexes
   , _fuel            :: !(f FuelCode Int16)
-  } deriving Generic
+  }
 makeLenses ''PropagInputs
 
 
@@ -432,7 +426,7 @@ makeLensesFor [("_inputUri", "uriLens")] ''Input
 
 data UniformityCondition d a
   = AllEqual
-  | RangeSmallerThan !(UnitQuantity d a)
+  | DistanceSmallerThan !(UnitQuantity d a)
 
 deriving instance Show (UnitQuantity d a) => Show (UniformityCondition d a)
 deriving instance Eq (UnitQuantity d a) => Eq (UniformityCondition d a)
@@ -440,14 +434,12 @@ deriving instance Eq (UnitQuantity d a) => Eq (UniformityCondition d a)
 
 
 similarQuantities
-  :: HasDifference (UnitQuantity d a)
+  :: (HasDistance (UnitQuantity d a), Ord (UnitQuantity d a))
   => UniformityCondition d a
   -> UnitQuantity d a -> UnitQuantity d a
   -> Bool
 similarQuantities AllEqual a b = a == b
-similarQuantities (RangeSmallerThan v) a b
-  | a > b     = a `difference` b < v
-  | otherwise = b `difference` a < v
+similarQuantities (DistanceSmallerThan v) a b = a `distance` b < v
 {-# INLINE similarQuantities #-}
 
 
@@ -456,21 +448,21 @@ similarQuantities (RangeSmallerThan v) a b
 allEqual :: UniformityCondition d a
 allEqual = AllEqual
 
-rangeSmallerThan :: UnitQuantity d a -> UniformityCondition d a
-rangeSmallerThan = RangeSmallerThan
+distanceSmallerThan :: UnitQuantity d a -> UniformityCondition d a
+distanceSmallerThan = DistanceSmallerThan
 
 
 instance Default (PropagInputs UniformityCondition) where
   def = PropagInputs {
-    _d1hr        = rangeSmallerThan (10 *~ perCent)
-  , _d10hr       = rangeSmallerThan (10 *~ perCent)
-  , _d100hr      = rangeSmallerThan (10 *~ perCent)
-  , _herb        = rangeSmallerThan (10 *~ perCent)
-  , _wood        = rangeSmallerThan (10 *~ perCent)
-  , _windSpeed   = rangeSmallerThan (1 *~ (meter DP./ second))
-  , _windBearing = rangeSmallerThan (5 *~ bearingDegree)
-  , _slope       = rangeSmallerThan (0.087488663525923993 *~ perOne)
-  , _aspect      = rangeSmallerThan (22.5 *~ bearingDegree)
+    _d1hr        = distanceSmallerThan (10 *~ perCent)
+  , _d10hr       = distanceSmallerThan (10 *~ perCent)
+  , _d100hr      = distanceSmallerThan (10 *~ perCent)
+  , _herb        = distanceSmallerThan (10 *~ perCent)
+  , _wood        = distanceSmallerThan (10 *~ perCent)
+  , _windSpeed   = distanceSmallerThan (1 *~ (meter DP./ second))
+  , _windBearing = distanceSmallerThan (5 *~ bearingDegree)
+  , _slope       = distanceSmallerThan (0.087488663525923993 *~ perOne)
+  , _aspect      = distanceSmallerThan (22.5 *~ bearingDegree)
   , _fuel        = allEqual
   }
 
@@ -498,7 +490,7 @@ data PropagConfig f t =
   , _propagConfigBlockSize            :: !BlockSize
   , _propagConfigMaxTime              :: !Time
   , _propagConfigFuelCatalog          :: !(Catalog Fuel)
-  } deriving Generic
+  }
 
 makeFields ''PropagConfig
 
@@ -619,7 +611,7 @@ similarFires pis a b =
   && match aspect      (fSpreadEnv.seAspect.to BearingAngleQ)
   where
     match
-      :: forall d a. HasDifference (UnitQuantity d a)
+      :: forall d a. (Ord (UnitQuantity d a), HasDistance (UnitQuantity d a))
       => Getter (PropagInputs UniformityCondition) (UniformityCondition d a)
       -> FireGetter ref (UnitQuantity d a)
       -> Bool
