@@ -27,8 +27,6 @@
 module Propag.Types (
     Time
   , DTime
-  , BearingAngleQ(..)
-  , BearingAngle(..)
   , DistanceUnit
   , Template
   , BlockIndex
@@ -131,7 +129,6 @@ module Propag.Types (
   , per
   , kmh
   , def
-  , bearingDegree
   , weaken
   , module Behave.Units
   , module Behave
@@ -188,7 +185,7 @@ import System.Mem.StableName (
 type family PropagIOConstraint (l :: *) (a :: *) :: Constraint
 type family PropagIONullable   (l :: *) (a :: *) :: *
 
-type Time = Behave.Time Double
+type Time = Quantity DTime Double
 type DistanceUnit = Unit 'NonMetric DLength Double
 
 class HasDistance a where
@@ -221,7 +218,6 @@ instance Num a => HasDistance (Quantity d a) where
 data FuelCode a = FuelCode
   deriving (Eq, Show)
 
-
 instance IsUnit FuelCode Int16 where
   type UnitQuantity FuelCode Int16 = Int16
   (*~) = const
@@ -230,31 +226,6 @@ instance IsUnit FuelCode Int16 where
   {-# INLINE (/~) #-}
 
 instance HasDistance Int16
-
-newtype BearingAngle a =
-  BearingAngle (Unit 'NonMetric DAzimuth a)
-  deriving Show
-
-newtype BearingAngleQ a =
-  BearingAngleQ { toAzimuth :: Quantity DAzimuth a }
-deriving instance Show (Quantity DAzimuth a) => Show (BearingAngleQ a)
-deriving instance Ord (Quantity DAzimuth a) => Ord (BearingAngleQ a)
-deriving instance Eq (Quantity DAzimuth a) => Eq (BearingAngleQ a)
-deriving instance Storable (Quantity DAzimuth a) => Storable (BearingAngleQ a)
-
-instance Num a => HasDistance (BearingAngleQ a) where
-  BearingAngleQ a `distance` BearingAngleQ b = BearingAngleQ (a `distance` b)
-  {-# INLINE distance #-}
-
-
-instance Fractional a => IsUnit BearingAngle a where
-  type UnitQuantity BearingAngle a = BearingAngleQ a
-  v               *~ BearingAngle u = BearingAngleQ (v DP.*~ u)
-  BearingAngleQ v /~ BearingAngle u = v DP./~ u
-  {-# INLINE (*~) #-}
-  {-# INLINE (/~) #-}
-
-
 
 
 newtype InputName (d :: * -> *) a = InputName { getName :: String }
@@ -315,11 +286,11 @@ data PropagInputs f =
   -- | Wind speed
   , _windSpeed       :: !(f (Unit 'NonMetric DVelocity) Double)
   -- | Wind direction azimuth (compass bearing)
-  , _windBearing     :: !(f BearingAngle Double)
+  , _windBearing     :: !(f (Unit 'NonMetric DPlaneAngle) Double)
   -- | Terrain slope (rise/reach ratio)
   , _slope           :: !(f (Unit 'NonMetric DRatio) Double)
   -- | Terrain aspect (downslope compass bearing)
-  , _aspect          :: !(f BearingAngle Double)
+  , _aspect          :: !(f (Unit 'NonMetric DPlaneAngle) Double)
   -- | Fuel catalog indexes
   , _fuel            :: !(f FuelCode Int16)
   }
@@ -346,12 +317,6 @@ per a b = weaken a DP./ weaken b
 {-# INLINE per #-}
 
 
-instance Default (BearingAngle Double) where
-  def = bearingDegree
-
-bearingDegree :: Floating a => BearingAngle a
-bearingDegree = BearingAngle degree
-
 instance Default (FuelCode Int16) where
   def = FuelCode
 
@@ -359,8 +324,8 @@ instance Default (FuelCode Int16) where
 type InputContainerSatisfies f (c :: * -> Constraint) =
   ( c (f (Unit 'NonMetric DVelocity) Double)
   , c (f (Unit 'NonMetric DRatio) Double)
+  , c (f (Unit 'NonMetric DPlaneAngle) Double)
   , c (f FuelCode Int16)
-  , c (f BearingAngle Double)
   )
 
 deriving instance InputContainerSatisfies f Show => Show (PropagInputs f)
@@ -460,9 +425,9 @@ instance Default (PropagInputs UniformityCondition) where
   , _herb        = distanceSmallerThan (10 *~ perCent)
   , _wood        = distanceSmallerThan (10 *~ perCent)
   , _windSpeed   = distanceSmallerThan (1 *~ (meter DP./ second))
-  , _windBearing = distanceSmallerThan (5 *~ bearingDegree)
+  , _windBearing = distanceSmallerThan (5 *~ degree)
   , _slope       = distanceSmallerThan (0.087488663525923993 *~ perOne)
-  , _aspect      = distanceSmallerThan (22.5 *~ bearingDegree)
+  , _aspect      = distanceSmallerThan (22.5 *~ degree)
   , _fuel        = allEqual
   }
 
@@ -606,9 +571,9 @@ similarFires pis a b =
   && match herb        (fSpreadEnv.seHerb)
   && match wood        (fSpreadEnv.seWood)
   && match windSpeed   (fSpreadEnv.seWindSpeed)
-  && match windBearing (fSpreadEnv.seWindAzimuth.to BearingAngleQ)
+  && match windBearing (fSpreadEnv.seWindAzimuth)
   && match slope       (fSpreadEnv.seSlope)
-  && match aspect      (fSpreadEnv.seAspect.to BearingAngleQ)
+  && match aspect      (fSpreadEnv.seAspect)
   where
     match
       :: forall d a. (Ord (UnitQuantity d a), HasDistance (UnitQuantity d a))

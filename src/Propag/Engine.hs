@@ -44,7 +44,6 @@ import Propag.Types (
   , inputMap
   , mapInputs
   , mapMInputs
-  , toAzimuth
   , geometry
   , similarFires
   , getName
@@ -577,9 +576,9 @@ loadFire bl off ref t = withStatus bl Loading $ do
             <*> load herb
             <*> load wood
             <*> (effectiveWindSpeed <$> pure code <*> load windSpeed)
-            <*> fmap toAzimuth (load windBearing)
+            <*> load windBearing
             <*> load slope
-            <*> fmap toAzimuth (load aspect)
+            <*> load aspect
           fuelComb@(_,comb) <- indexCatalog fuels code
           let sp    = spread2 fuelComb spEnv
               rTime = combResidenceTime comb

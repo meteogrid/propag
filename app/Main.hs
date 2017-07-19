@@ -43,9 +43,9 @@ main = void $ propagate DemoIOConfig cfg
             , _herb        = InputMap [(timeSpec, Constant 80 perCent)]
             , _wood        = InputMap [(timeSpec, Constant 26.6 perCent)]
             , _windSpeed   = InputMap [(timeSpec, Constant 5 kmh)]
-            , _windBearing = InputMap [(timeSpec, Constant 10 bearingDegree)]
+            , _windBearing = InputMap [(timeSpec, Constant 10 degree)]
             , _slope       = InputMap [(timeSpec, Constant 20 perCent)]
-            , _aspect      = InputMap [(timeSpec, Constant 30 bearingDegree)]
+            , _aspect      = InputMap [(timeSpec, Constant 30 degree)]
             , _fuel        = InputMap [(timeSpec, Constant 3  def)]
             }
 
