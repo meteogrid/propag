@@ -14,6 +14,10 @@ data Extent = Extent
   , eMax :: !(V2 Double)
   } deriving (Eq, Ord, Show)
 
+data Crs = EPSG  !Int
+         | Proj4 !String
+  deriving (Eq, Ord, Show)
+
 instance SG.Semigroup Extent where
   Extent a0 a1 <> Extent b0 b1 = Extent (min <$> a0 <*> b0) (max <$> a1 <*> b1)
 
@@ -28,6 +32,7 @@ data GeoTransform = GeoTransform
 data GeoReference = GeoReference
   { grTransform :: !GeoTransform
   , grSize      :: !(V2 Int)
+  , grCrs       :: !Crs
   } deriving (Eq, Ord, Show)
 
 data Raster v a = Raster
@@ -39,7 +44,7 @@ newtype PixelSize = PixelSize {unPixelSize :: V2 Double}
   deriving (Eq, Ord, Show)
 
 geoRefExtent :: GeoReference -> Extent 
-geoRefExtent (GeoReference (GeoTransform (V2 (V2 dx xr) (V2 yr dy)) o) sz)
+geoRefExtent (GeoReference (GeoTransform (V2 (V2 dx xr) (V2 yr dy)) o) sz _)
   = Extent o (assert (dx>0 && dy>0 && xr==0 && yr==0)
                      (o + (fmap fromIntegral sz * V2 dx dy)))
 
@@ -81,10 +86,11 @@ dda pA pB@(V2 x1 y1)
     validX = if stepX > 0 then (<=x1) else (>=x1)
     validY = if stepY > 0 then (<=y1) else (>=y1)
 
-southUpGeoReference :: Extent -> PixelSize -> GeoReference
-southUpGeoReference ext (PixelSize pz@(V2 dx dy)) = GeoReference
+southUpGeoReference :: Extent -> PixelSize -> Crs -> GeoReference
+southUpGeoReference ext (PixelSize pz@(V2 dx dy)) crs = GeoReference
   { grSize      = fmap round (eSize ext / pz)
   , grTransform = GeoTransform { gtOrigin = eMin ext
                                , gtMatrix = V2 (V2 dx 0) (V2 0 dy)
                                }
+  , grCrs = crs
   }

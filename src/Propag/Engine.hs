@@ -42,6 +42,7 @@ import Propag.Types (
   , Azimuth
   , Time
   , inputMap
+  , crs
   , mapInputs
   , mapMInputs
   , geometry
@@ -90,6 +91,7 @@ import Propag.Geometry (
   , GeoTransform(..)
   , Raster (..)
   , PixelSize (..)
+  , Crs
   , southUpGeoReference
   , geoRefExtent
   , dda
@@ -256,6 +258,7 @@ data SimulatorEnv l =
   SimulatorEnv {
     _envFireMap      :: !(TMVar (FireMap l ))
   , _envOrigin       :: !(V2 Double)
+  , _envCrs          :: !Crs
   , _envPixelSize    :: !PixelSize
   , _envBlockSize    :: !BlockSize
   , _envMaxTime      :: !Time
@@ -286,6 +289,7 @@ propagate ioCfg iPc = do
     simEnvironment <- SimulatorEnv
       <$> newTMVarIO mempty
       <*> justOrFail NoIgnitedElements (calculateOrigin pc)
+      <*> pure (pc^.crs)
       <*> pure (pc^.pixelSize)
       <*> pure (pc^.blockSize)
       <*> pure (pc^.maxTime)
@@ -896,7 +900,7 @@ blockGeoReference blockIx = do
       matrix     = V2 (V2 dx 0) (V2 0 dy)
       bSize      = unBlockSize (env^.envBlockSize)
       (V2 dx dy) = unPixelSize (env^.envPixelSize)
-  return (GeoReference (GeoTransform matrix origin) bSize)
+  return (GeoReference (GeoTransform matrix origin) bSize (env^.envCrs))
 
 getEmitMessage
   :: MonadIO m => Simulator l (MessageLevel -> String -> m ())

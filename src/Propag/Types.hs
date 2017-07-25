@@ -77,6 +77,7 @@ module Propag.Types (
 
   , HasFuelCatalog (..)
   , HasPixelSize (..)
+  , HasCrs (..)
   , HasInitialElements (..)
   , initialTimes
   , HasInputs (..)
@@ -449,6 +450,7 @@ instance Default (PropagInputs InputName) where
 data PropagConfig f t =
   PropagConfig {
     _propagConfigInputs               :: !(PropagInputs f)
+  , _propagConfigCrs                  :: !Crs
   , _propagConfigUniformityConditions :: !(PropagInputs UniformityCondition)
   , _propagConfigInitialElements      :: !(IgnitedElements t)
   , _propagConfigPixelSize            :: !PixelSize
@@ -467,7 +469,7 @@ instance ( Default (PropagInputs f)
          , Default (PropagInputs UniformityCondition)
          , Monoid  (IgnitedElements t)
          ) => Default (PropagConfig f t ) where
-  def = PropagConfig def def mempty (PixelSize 25) (BlockSize 256) (5 *~ hour) def
+  def = PropagConfig def (EPSG 25830) def mempty (PixelSize 25) (BlockSize 256) (5 *~ hour) def
 
 makeLensesFor [
     ("_propagConfigInputs", "inputsLens")
