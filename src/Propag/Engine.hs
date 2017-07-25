@@ -123,7 +123,7 @@ import Data.Default (def)
 import Data.Fixed (Fixed, E0, div')
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
---import qualified Data.HashMap.Strict as HM
+import qualified Data.HashMap.Strict as HM
 import Data.Maybe (isJust, listToMaybe, catMaybes, fromMaybe, mapMaybe)
 import Data.Proxy
 import Data.These (These(..))
@@ -203,10 +203,6 @@ toThreadError :: BlockIndex -> BlockStatus -> Maybe RunnerError
 toThreadError bi (Errored e) = Just (ThreadError bi e)
 toThreadError _   _           = Nothing
 
-allFinished :: [BlockStatus] -> Bool
-allFinished statuses = all isDone allButReady && not (null allButReady)
-  where allButReady = filter (not . isReady) statuses
-
 
 data MessageLevel = Error | Warning | Info | Debug
   deriving Show
@@ -220,12 +216,12 @@ printMessage (Message t level tid msg) = do
 
 
 newtype LoaderCache l (d :: * -> *) a =
-  LoaderCache (M.Map (Loader l d a) (TMVar (LoaderRaster l d a)))
+  LoaderCache (HM.HashMap (Loader l d a) (TMVar (LoaderRaster l d a)))
   deriving Monoid
 
 loaderCache
   :: Lens' (LoaderCache l d a)
-           (M.Map (Loader l d a) (TMVar (LoaderRaster l d a)))
+           (HM.HashMap (Loader l d a) (TMVar (LoaderRaster l d a)))
 loaderCache = lens (\(LoaderCache c) -> c) (const LoaderCache)
 
 
@@ -250,7 +246,7 @@ instance Show (Block l)  where
             , "blExtent = " , show (bl^.blExtent), " }"]
 
 
-type FireMap   l = M.Map BlockIndex (Block l)
+type FireMap   l = HM.HashMap BlockIndex (Block l)
 
 
 
@@ -312,19 +308,19 @@ makePropagationResult pc = do
   pxSize   <- view envPixelSize
   orig     <- view envOrigin
   backward <- getBackward
-  let totalGeoRef  = southUpGeoReference totalExtent pxSize
+  let totalGeoRef  = southUpGeoReference totalExtent pxSize (pc^.crs)
       totalExtent  = V.foldl' (SG.<>) (Extent orig orig) extents
-      extents      = V.map (^.blExtent) (V.fromList (M.elems bMap))
-      ixs          = M.keys bMap
+      extents      = V.map (^.blExtent) (V.fromList (HM.elems bMap))
+      ixs          = HM.keys bMap
       ixOrigin     = fmap minimum (V2 (ixs^..traverse._x) (ixs^..traverse._y))
       pxs2pts      = St.map (fOrigin %~ backward)
-  blocks <- fmap M.fromList $ forM (M.toList bMap) $ \(idx, bl) -> do
+  blocks <- fmap HM.fromList $ forM (HM.toList bMap) $ \(idx, bl) -> do
     vec <- pxs2pts <$> liftIO (St.unsafeFreeze (bl^.blFires))
     return (idx-ixOrigin, Raster (bl^.blGeoReference) vec)
   return PropagationResult {
       _prGeoReference = totalGeoRef
     , _prConfig       = pc
-    , _prBlockCount   = M.size bMap
+    , _prBlockCount   = HM.size bMap
     , _prBlocks       = blocks
     }
 {-# INLINE makePropagationResult #-}
@@ -341,8 +337,8 @@ waitThreadsAreDone = do
   liftIO $ do
     atomically $ do
       statusMap <- mapM (readTVar . (^.blStatus))  =<< readTMVar tMap
-      let finished = allFinished (M.elems statusMap)
-          errors = mapMaybe (uncurry toThreadError) (M.toList statusMap)
+      let finished = allFinished (HM.elems statusMap)
+          errors = mapMaybe (uncurry toThreadError) (HM.toList statusMap)
       case (listToMaybe errors, finished) of
         (Just e, _   ) -> throwSTM e
         (_     , True) -> return ()
@@ -350,6 +346,10 @@ waitThreadsAreDone = do
     putStrLn "\n\nFinished simulation"
     formatElapsedClockCpu
       "Total clock time: %12.2fs\nTotal CPU time: %12.2fs\n\n"
+
+allFinished :: [BlockStatus] -> Bool
+allFinished statuses = all isDone allButReady && not (null allButReady)
+  where allButReady = filter (not . isReady) statuses
 
 
 --
@@ -502,12 +502,12 @@ loadRaster
   -> IO (AsyncRaster l d a)
 loadRaster emit bl (t, loaders) lns = join $ atomically $ do
   cache <-  readTVar (bl^.blLoaderCache)
-  case loader `M.lookup` (cache^.lns.loaderCache) of
+  case loader `HM.lookup` (cache^.lns.loaderCache) of
     Just mVar -> return (waitForIt mVar)
     Nothing   -> do
       mVar <- newEmptyTMVar
       modifyTVar' (bl^.blLoaderCache)
-                  (lns.loaderCache %~ M.insert loader mVar)
+                  (lns.loaderCache %~ HM.insert loader mVar)
       return $ do
         emit Debug $ printf "Loading %s for %.0fm" varName asMins
         void $ forkOSFinally (runLoader loader geoRef) $ \case
@@ -650,7 +650,7 @@ getOrCreateBlock blockIx = do
   fireMap <- view envFireMap
   eBl <- liftIO $ atomically $ do
     bMap <- readTMVar fireMap
-    case blockIx `M.lookup` bMap of
+    case blockIx `HM.lookup` bMap of
       Just bl -> return (Right bl)
       Nothing -> do
         bMap' <- takeTMVar fireMap
@@ -660,7 +660,7 @@ getOrCreateBlock blockIx = do
     Left bMap -> (do
       bl <- newEmptyBlock blockIx
       _ <- automataThread bl
-      let bMap' = M.insert blockIx bl bMap
+      let bMap' = HM.insert blockIx bl bMap
       liftIO (atomically (putTMVar fireMap bMap'))
       return bl
       ) `onException` liftIO (atomically (putTMVar fireMap bMap))
@@ -731,7 +731,7 @@ automataThread bl = do
   env <- ask
   liftIO $ forkFinally (runSimulator env (simulate PQ.empty)) $ \case
     Left e -> atomically (writeTVar (bl^.blStatus) (Errored e))
-    Right () -> return ()
+    Right () -> atomically (writeTVar (bl^.blStatus) Done)
   where
     simulate !(PQ.minView -> Just (pA, timeA, pRcand, queue)) = do
       liftIO (atomically (writeTVar (bl^.blCurTime) timeA))
@@ -889,7 +889,7 @@ getBlockPixelAndOffset mHint pA = do
     Just hint
       | (hint^.blIndex) == bi ->
           return (Just (hint, px, off))
-    _ -> (fmap (\n -> (n,px,off)) . M.lookup bi) <$> getFireMap
+    _ -> (fmap (\n -> (n,px,off)) . HM.lookup bi) <$> getFireMap
 
 
 blockGeoReference :: BlockIndex -> Simulator l GeoReference

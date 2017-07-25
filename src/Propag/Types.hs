@@ -152,6 +152,7 @@ import Data.Maybe (fromMaybe)
 import Data.Int (Int16)
 import Data.Function (on)
 import Data.Hashable (Hashable(..))
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as M
 import Data.Text (Text)
 import Data.Time (UTCTime, addUTCTime)
@@ -596,7 +597,7 @@ data PropagationResult =
     _prGeoReference :: GeoReference
   , _prConfig       :: InitialPropagConfig
   , _prBlockCount   :: Int
-  , _prBlocks       :: M.Map BlockIndex FireRaster
+  , _prBlocks       :: HM.HashMap BlockIndex FireRaster
   }
 makeLenses ''PropagationResult
 
